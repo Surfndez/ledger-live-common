@@ -45,6 +45,8 @@ export type InferTransactionsOpts = Partial<{
   amount: string;
   shuffle: boolean;
   "fees-strategy": string;
+  collection: string;
+  tokenId: string;
 }>;
 export const inferTransactionsOpts = uniqBy(
   [
@@ -106,6 +108,13 @@ export async function inferTransactions(
       transaction.amount = transaction.useAllAmount
         ? new BigNumber(0)
         : inferAmount(account, opts.amount || "0");
+
+      // NFT related
+      if (opts.tokenId && opts.collection) {
+        transaction.tokenId = opts.tokenId;
+        transaction.collection = opts.collection;
+      }
+
       return {
         account,
         transaction,
