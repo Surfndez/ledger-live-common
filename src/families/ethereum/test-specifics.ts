@@ -59,17 +59,51 @@ export default (): void => {
           .pipe(reduce((a, f) => f(a), account))
           .toPromise();
 
-        const openSeaRes = await axios
-          .get(
-            `https://api.opensea.io/api/v1/assets?limit=50&owner=${nftAccount.freshAddress}`
-          )
-          .then(({ data }) =>
-            data?.assets.filter(
-              (a) => a?.asset_contract?.schema_name === "ERC721"
-            )
+        const getPaginatedOpenSeaRes = async (assets = []) => {
+          const { data } = await axios.get(
+            `https://api.opensea.io/api/v1/assets?offset=${assets.length}&limit=50&owner=${nftAccount.freshAddress}`
           );
 
-        expect(synced.NFT?.length).toBe(openSeaRes.length);
+          assets.push(...((data?.assets ?? []) as []));
+
+          if (data?.assets?.length === 50) {
+            await getPaginatedOpenSeaRes(assets);
+          }
+
+          return assets;
+        };
+
+        const openSeaList: any = await getPaginatedOpenSeaRes().then(
+          (assets: any) =>
+            // removes lazy minting from open sea
+            assets
+              ?.filter(
+                (a) =>
+                  !(
+                    a?.is_presale &&
+                    a?.num_sales === 0 &&
+                    a?.creator?.address === nftAccount.freshAddress
+                  )
+              )
+              .map((n) => ({
+                contract: n.asset_contract.address,
+                tokenId: n.token_id,
+              }))
+        );
+
+        const ourList =
+          synced.NFT?.map((n) => ({
+            contract: n.collection.contract,
+            tokenId: n.tokenId,
+          })) || [];
+
+        expect(ourList?.length).toEqual(openSeaList?.length);
+        expect(
+          _.isEqual(
+            _.sortBy(openSeaList, ["contract", "tokenId"]),
+            _.sortBy(ourList, ["contract", "tokenId"])
+          )
+        ).toBe(true);
       }
     );
   });
